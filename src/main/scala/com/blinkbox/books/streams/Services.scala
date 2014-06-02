@@ -25,7 +25,7 @@ object Services {
    *  Common interface for services that return results for requests as Futures that complete after a random delay,
    */
   trait Transformer {
-    def transform(value: String): Future[String] = sometimesInFuture(tag)(doTransform(value))
+    def transform(value: String): Future[String] = sometimesInFuture(s"$tag transforming value $value")(doTransform(value))
 
     protected def doTransform(value: String): String
     private def tag = getClass.getSimpleName
@@ -82,7 +82,9 @@ object Services {
    * Make operations take a random amount of time and intermittently fail.
    */
   def sometimesInFuture[T](tag: String)(func: => T): Future[T] = Future {
+    println(s"Starting job for $tag")
     Thread.sleep(random.nextInt(maxWaitTime))
+    println(s"Completed job for $tag")
     sometimes(tag)(func).get
   }
 
