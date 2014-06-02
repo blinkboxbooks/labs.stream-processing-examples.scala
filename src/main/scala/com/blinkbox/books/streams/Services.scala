@@ -18,14 +18,18 @@ object Services {
   /** An input message. */
   case class Data(id: Long, value: String)
 
+  /** Some intermediate type */
+  case class Widget(name: String)
+
   /** Enriched input data. */
-  case class EnrichedData(input: Data, extra1: String, extra2: String)
+  case class EnrichedData(input: Data, extra1: String, extra2: String, extra3: Widget)
 
   /**
    *  Common interface for services that return results for requests as Futures that complete after a random delay,
    */
   trait Transformer {
-    def transform(value: String): Future[String] = sometimesInFuture(s"$tag transforming value $value")(doTransform(value))
+    def transform(value: String): Future[String] =
+      sometimesInFuture(s"$tag transforming value $value")(doTransform(value))
 
     protected def doTransform(value: String): String
     private def tag = getClass.getSimpleName
@@ -37,6 +41,12 @@ object Services {
 
   class UpperCaser extends Transformer {
     override def doTransform(value: String) = value.toUpperCase
+  }
+
+  /** A different type of transformer that doesn't return the same type as the others. */
+  class Sorter {
+    def transform(value: String): Future[Widget] =
+      sometimesInFuture(s"Sorter transforming value $value")(Widget(value.sorted))
   }
 
   /**

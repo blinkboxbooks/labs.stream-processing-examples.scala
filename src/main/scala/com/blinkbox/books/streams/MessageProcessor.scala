@@ -9,8 +9,11 @@ trait MessageProcessor {
 
   val enricher1 = new Reverser()
   val enricher2 = new UpperCaser()
+  val enricher3 = new Sorter()
+
   val input = new Input()
   val output = new Output()
+
   val invalidMsgHandler = new InvalidMessageHandler()
 
   // Use an input Observable that generates a message every second.

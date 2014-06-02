@@ -41,15 +41,16 @@ object ErrorHandlingRxEnrichmentPipeline extends App with MessageProcessor {
 
   val joined = for (
     input <- inputObservable;
-    (enriched1, enriched2) <- Observable.from(result(enricher1.transform(input.value)))
-      zip Observable.from(result(enricher2.transform(input.value)));
-    enriched = merge(enriched1, enriched2)
-  ) yield (input, enriched)
+    ((res1, res2), res3) <- Observable.from(result(enricher1.transform(input.value)))
+      .zip(Observable.from(result(enricher2.transform(input.value))))
+      .zip(Observable.from(result(enricher3.transform(input.value))));
+    merged = merge(merge(res1, res2), res3)
+  ) yield (input, merged)
 
   // Kick things off.
   val subscription = joined.subscribe({
-    case (inputData, Right((enriched1, enriched2))) => {
-      output.save(EnrichedData(inputData, enriched1, enriched2)) match {
+    case (inputData, Right(((enriched1, enriched2), enriched3))) => {
+      output.save(EnrichedData(inputData, enriched1, enriched2, enriched3)) match {
         case Success(v) => input.ack(inputData.id)
         case Failure(e) => {
           invalidMsgHandler.invalid(inputData)

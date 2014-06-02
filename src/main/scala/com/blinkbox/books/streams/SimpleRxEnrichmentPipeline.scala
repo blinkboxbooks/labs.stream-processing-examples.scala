@@ -19,14 +19,15 @@ object SimpleRxEnrichmentPipeline extends App with MessageProcessor {
   // Create a pipeline that processes the input data.
   val joined = for (
     input <- inputObservable;
-    (enriched1, enriched2) <- Observable.from(enricher1.transform(input.value))
+    ((enriched1, enriched2), enriched3) <- Observable.from(enricher1.transform(input.value))
       zip Observable.from(enricher2.transform(input.value))
-  ) yield (input, enriched1, enriched2)
+      zip Observable.from(enricher3.transform(input.value))
+  ) yield (input, enriched1, enriched2, enriched3)
 
   // Kick things off.
   joined.subscribe({
-    case (inputData, enriched1, enriched2) => {
-      output.save(EnrichedData(inputData, enriched1, enriched2)) match {
+    case (inputData, enriched1, enriched2, enriched3) => {
+      output.save(EnrichedData(inputData, enriched1, enriched2, enriched3)) match {
         case Success(v) => input.ack(inputData.id)
         case Failure(e) => { // Won't get called in this example!
           invalidMsgHandler.invalid(inputData)
