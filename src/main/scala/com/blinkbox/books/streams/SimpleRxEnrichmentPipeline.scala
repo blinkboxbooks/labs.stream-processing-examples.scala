@@ -1,10 +1,10 @@
 package com.blinkbox.books.streams
 
 import rx.lang.scala.Observable
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{ Try, Success, Failure }
+import Services._
 
 /**
  * Simplistic example that uses RxJava (https://github.com/Netflix/RxJava) to do stream processing of events.
@@ -14,25 +14,12 @@ import scala.util.{ Try, Success, Failure }
  * any one of a set of composed Observables causes the overall Observable to fail. This is not what we want,
  * hence we'd have to deal differently with individual errors.
  */
-object SimpleRxEnrichmentPipeline extends App {
-
-  import Services._
-
-  val enricher1 = new Reverser()
-  val enricher2 = new UpperCaser()
-  val output = new Output()
-
-  println("Starting")
+object SimpleRxEnrichmentPipeline extends App with MessageProcessor {
 
   // 
   // Create a pipeline that processes the input data.
   //
 
-  // Use an input Observable that generates a message every 2 seconds.
-  val inputObservable = Observable.interval(1.second)
-    .map(l => Input(s"Input Data: ${l.toString}"))
-
-  // Enrich data in further observables.
   // (Could write these using for comprehensions instead)
   val enriched1 = inputObservable.flatMap(input => Observable.from(enricher1.transform(input.value)))
   val enriched2 = inputObservable.flatMap(input => Observable.from(enricher2.transform(input.value)))
@@ -41,15 +28,17 @@ object SimpleRxEnrichmentPipeline extends App {
 
   // Kick things off.
   joined.subscribe({
-    case (input, data1, data2) => {
-      output.save(EnrichedData(input, data1, data2)) match {
-        case Failure(e) => println(s"Error in data: ${e.getMessage}")
-        case Success(v) => println(s"Successfully saved value $v")
+    case (inputData, enriched1, enriched2) => {
+      output.save(EnrichedData(inputData, enriched1, enriched2)) match {
+        case Success(v) => input.ack(inputData.id)
+        case Failure(e) => { // Won't get called in this example!
+          invalidMsgHandler.invalid(inputData)
+          input.ack(inputData.id)
+        }
       }
     }
   },
-    e => { println(s"Pipeline error! $e") },
-    () => { println("Completed") })
+    e => { println(s"Pipeline error! $e") })
 
   // Wait around.
   Console.readLine()

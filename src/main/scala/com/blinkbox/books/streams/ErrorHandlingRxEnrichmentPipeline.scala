@@ -1,10 +1,10 @@
 package com.blinkbox.books.streams
 
+import rx.lang.scala.Observable
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.{ Try, Success, Failure }
-import rx.lang.scala.Observable
 import Services._
 
 /**
@@ -15,7 +15,7 @@ import Services._
  * being of an Either type. This version merges intermediate results into a single Either, but it
  * still seems pretty clumsy.
  */
-object ErrorHandlingRxEnrichmentPipeline extends App {
+object ErrorHandlingRxEnrichmentPipeline extends App with MessageProcessor {
 
   // Wrap results in an Either type, to pass through Rx observables.
   // I.e. treating "expected errors" as values,
@@ -35,47 +35,30 @@ object ErrorHandlingRxEnrichmentPipeline extends App {
     case (Left(t1), Left(t2)) => Left(t1)
   }
 
-  /**
-   * Combine two results, with the first value taking precedence.
-   */
-  def combine[T](res1: Result[T], res2: Result[T]): Result[T] =
-    if (res1.isRight) res1 else res2
-
-  val enricher1 = new Reverser()
-  val enricher2 = new UpperCaser()
-  val output = new Output()
-
-  println("Starting")
-
   //
   // Create a pipeline that processes the input data.
   //
 
-  // Use an input Observable that generates a message every 2 seconds.
-  val inputObservable = Observable.interval(1.second)
-    .map(l => Input(s"Input Data: ${l.toString}"))
-
-  // Enrich data in further observables.
   // (Could write these using for comprehensions instead)
   val enriched1 = inputObservable.flatMap(input => Observable.from(result(enricher1.transform(input.value))))
   val enriched2 = inputObservable.flatMap(input => Observable.from(result(enricher2.transform(input.value))))
-
   val joined = inputObservable.zip(enriched1 zip enriched2)
     .map({ case (i, (d1, d2)) => (i, merge(d1, d2)) })
 
   // Kick things off.
   val subscription = joined.subscribe({
-    case (input, Right((data1, data2))) => {
-      output.save(EnrichedData(input, data1, data2)) match {
-        case Failure(e) => println(s"Error in data: ${e.getMessage}")
-        case Success(v) => println(s"Successfully processed value $v")
+    case (inputData, Right((enriched1, enriched2))) => {
+      output.save(EnrichedData(inputData, enriched1, enriched2)) match {
+        case Success(v) => input.ack(inputData.id)
+        case Failure(e) => {
+          invalidMsgHandler.invalid(inputData)
+          input.ack(inputData.id)
+        }
       }
     }
-    case (_, Left(t)) => println(s"Error handled: ${t.getMessage}")
-
+    case (inputData, Left(t)) => invalidMsgHandler.invalid(inputData)
   },
-    e => { println(s"Pipeline error! $e") },
-    () => { println("Completed") })
+    e => { println(s"Pipeline error! $e") })
 
   // Wait around.
   Console.readLine()

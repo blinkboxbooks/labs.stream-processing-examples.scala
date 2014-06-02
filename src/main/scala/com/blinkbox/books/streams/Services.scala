@@ -13,13 +13,13 @@ object Services {
   // Values used in randomising behaviour.
   val random = new Random
   val maxWaitTime = 5000
-  val failurePercentage = 20
+  val failurePercentage = 2
 
   /** An input message. */
-  case class Input(value: String)
+  case class Data(id: Long, value: String)
 
   /** Enriched input data. */
-  case class EnrichedData(input: Input, extra1: String, extra2: String)
+  case class EnrichedData(input: Data, extra1: String, extra2: String)
 
   /**
    *  Common interface for services that return results for requests as Futures that complete after a random delay,
@@ -40,6 +40,14 @@ object Services {
   }
 
   /**
+   * A thing that nominally produces the data, to which we need to ack or nack messages.
+   */
+  class Input {
+    def ack(id: Long) = { println(s"Acked message $id") }
+    def nack(id: Long) = { println(s"Nacked message $id") }
+  }
+
+  /**
    * A thing we can write results to, emulating something like a database, a search index
    * or other data store. I.e. a side-effecting operation that runs synchronously.
    *
@@ -52,6 +60,13 @@ object Services {
       println(s"Saved $data")
       data
     }
+  }
+
+  /**
+   * A service that records messages that couldn't be processed.
+   */
+  class InvalidMessageHandler {
+    def invalid(msg: Data) = { println(s"Handled error for message: $msg") }
   }
 
   /**
