@@ -42,8 +42,9 @@ object ErrorHandlingRxEnrichmentPipeline extends App with MessageProcessor {
   val joined = for (
     input <- inputObservable;
     (enriched1, enriched2) <- Observable.from(result(enricher1.transform(input.value)))
-      zip Observable.from(result(enricher2.transform(input.value)))
-  ) yield (input, merge(enriched1, enriched2))
+      zip Observable.from(result(enricher2.transform(input.value)));
+    enriched = merge(enriched1, enriched2)
+  ) yield (input, enriched)
 
   // Kick things off.
   val subscription = joined.subscribe({
