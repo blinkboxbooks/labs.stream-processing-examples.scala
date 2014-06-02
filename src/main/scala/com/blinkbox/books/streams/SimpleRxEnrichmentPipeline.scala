@@ -16,15 +16,12 @@ import Services._
  */
 object SimpleRxEnrichmentPipeline extends App with MessageProcessor {
 
-  // 
   // Create a pipeline that processes the input data.
-  //
-
-  // (Could write these using for comprehensions instead)
-  val enriched1 = inputObservable.flatMap(input => Observable.from(enricher1.transform(input.value)))
-  val enriched2 = inputObservable.flatMap(input => Observable.from(enricher2.transform(input.value)))
-  val joined = inputObservable.zip(enriched1 zip enriched2)
-    .map({ case (i, (d1, d2)) => (i, d1, d2) })
+  val joined = for (
+    input <- inputObservable;
+    (enriched1, enriched2) <- Observable.from(enricher1.transform(input.value))
+      zip Observable.from(enricher2.transform(input.value))
+  ) yield (input, enriched1, enriched2)
 
   // Kick things off.
   joined.subscribe({
