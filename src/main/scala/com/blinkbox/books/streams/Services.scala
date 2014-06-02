@@ -13,7 +13,7 @@ object Services {
   // Values used in randomising behaviour.
   val random = new Random
   val maxWaitTime = 5000
-  val failurePercentage = 5
+  val failurePercentage = 20
 
   /** An input message. */
   case class Input(value: String)
@@ -48,7 +48,7 @@ object Services {
    * hence wouldn't come out of this class as an error.
    */
   class Output {
-    def save(data: EnrichedData): Try[EnrichedData] = sometimes {
+    def save(data: EnrichedData): Try[EnrichedData] = sometimes("output") {
       println(s"Saved $data")
       data
     }
@@ -57,18 +57,18 @@ object Services {
   /**
    * Make operations intermittently fail.
    */
-  def sometimes[T](func: => T): Try[T] =
+  def sometimes[T](tag: String)(func: => T): Try[T] =
     if (random.nextInt(100) > failurePercentage)
       Success(func)
     else
-      Failure(new Exception(s"Random failure!"))
+      Failure(new Exception(s"Random failure from '$tag'!"))
 
   /**
    * Make operations take a random amount of time and intermittently fail.
    */
   def sometimesInFuture[T](tag: String)(func: => T): Future[T] = Future {
     Thread.sleep(random.nextInt(maxWaitTime))
-    sometimes(func).get
+    sometimes(tag)(func).get
   }
 
 }
