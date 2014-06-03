@@ -10,6 +10,7 @@ trait MessageProcessor {
   val enricher1 = new Reverser()
   val enricher2 = new UpperCaser()
   val enricher3 = new Sorter()
+  val outputTransformer = new DataTransformer()
 
   val input = new Input()
   val output = new Output()

@@ -39,26 +39,29 @@ object ErrorHandlingRxEnrichmentPipeline extends App with MessageProcessor {
   // Create a pipeline that processes the input data.
   //
 
+  // The following for comprehension operates on Observables, and passes results around as Eithers.
+  // I think we can agree that this ends up being horrible and not at all usable!
   val joined = for (
     input <- inputObservable;
     ((res1, res2), res3) <- Observable.from(result(enricher1.transform(input.value)))
       .zip(Observable.from(result(enricher2.transform(input.value))))
       .zip(Observable.from(result(enricher3.transform(input.value))));
-    merged = merge(merge(res1, res2), res3)
-  ) yield (input, merged)
+    merged = merge(merge(res1, res2), res3);
+    output <- Observable.from(merged.fold(
+      t => Future.failed(t),
+      { case (((enriched1, enriched2), enriched3)) => outputTransformer.transform(EnrichedData(input, enriched1, enriched2, enriched3)) }))
+  ) yield (output)
 
   // Kick things off.
   val subscription = joined.subscribe({
-    case (inputData, Right(((enriched1, enriched2), enriched3))) => {
-      output.save(EnrichedData(inputData, enriched1, enriched2, enriched3)) match {
-        case Success(v) => input.ack(inputData.id)
+    case outputData =>
+      output.save(outputData) match {
+        case Success(v) => input.ack(outputData.data.input.id)
         case Failure(e) => {
-          invalidMsgHandler.invalid(inputData)
-          input.ack(inputData.id)
+          invalidMsgHandler.invalid(outputData.data.input)
+          input.ack(outputData.data.input.id)
         }
       }
-    }
-    case (inputData, Left(t)) => invalidMsgHandler.invalid(inputData)
   },
     e => { println(s"Pipeline error! $e") })
 

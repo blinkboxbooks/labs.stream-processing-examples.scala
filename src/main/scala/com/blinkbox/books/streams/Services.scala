@@ -24,6 +24,9 @@ object Services {
   /** Enriched input data. */
   case class EnrichedData(input: Data, extra1: String, extra2: String, extra3: Widget)
 
+  /** Yet another intermediate type. */
+  case class OutputData(data: EnrichedData, additional: String)
+
   /**
    *  Common interface for services that return results for requests as Futures that complete after a random delay,
    */
@@ -43,10 +46,16 @@ object Services {
     override def doTransform(value: String) = value.toUpperCase
   }
 
-  /** A different type of transformer that doesn't return the same type as the others. */
+  /** A type of enricher that doesn't return the same type as the others. */
   class Sorter {
     def transform(value: String): Future[Widget] =
       sometimesInFuture(s"Sorter transforming value $value")(Widget(value.sorted))
+  }
+
+  /** A type of transformer that takes a more complex input type. */
+  class DataTransformer {
+    def transform(data: EnrichedData): Future[OutputData] =
+      sometimesInFuture(getClass.getSimpleName)(OutputData(data, s"transformed ${data.input.id}"))
   }
 
   /**
@@ -66,7 +75,7 @@ object Services {
    * hence wouldn't come out of this class as an error.
    */
   class Output {
-    def save(data: EnrichedData): Try[EnrichedData] = sometimes("output") {
+    def save(data: OutputData): Try[OutputData] = sometimes("output") {
       println(s"Saved $data")
       data
     }

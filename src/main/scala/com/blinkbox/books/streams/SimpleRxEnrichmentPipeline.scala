@@ -21,22 +21,23 @@ object SimpleRxEnrichmentPipeline extends App with MessageProcessor {
     input <- inputObservable;
     ((enriched1, enriched2), enriched3) <- Observable.from(enricher1.transform(input.value))
       zip Observable.from(enricher2.transform(input.value))
-      zip Observable.from(enricher3.transform(input.value))
-  ) yield (input, enriched1, enriched2, enriched3)
+      zip Observable.from(enricher3.transform(input.value));
+    output <- Observable.from(outputTransformer.transform(EnrichedData(input, enriched1, enriched2, enriched3)))
+  ) yield (output)
 
   // Kick things off.
   joined.subscribe({
-    case (inputData, enriched1, enriched2, enriched3) => {
-      output.save(EnrichedData(inputData, enriched1, enriched2, enriched3)) match {
-        case Success(v) => input.ack(inputData.id)
+    case (outputData) => {
+      output.save(outputData) match {
+        case Success(v) => input.ack(outputData.data.input.id)
         case Failure(e) => { // Won't get called in this example!
-          invalidMsgHandler.invalid(inputData)
-          input.ack(inputData.id)
+          invalidMsgHandler.invalid(outputData.data.input)
+          input.ack(outputData.data.input.id)
         }
       }
     }
   },
-    e => { println(s"Pipeline error! $e") })
+    e => { println(s"Pipeline error! $e") }) // Data errors end up here, oh no!
 
   // Wait around.
   Console.readLine()
