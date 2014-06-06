@@ -4,6 +4,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.util.Random
 import scala.util.{ Try, Success, Failure }
+import pl.project13.scala.rainbow.Rainbow._
 
 /**
  * Shared services and utilities for the message processing examples.
@@ -76,7 +77,7 @@ object Services {
    */
   class Output {
     def save(data: OutputData): Try[OutputData] = sometimes("output") {
-      println(s"Saved $data")
+      println(s"Saved $data".green)
       data
     }
   }
@@ -85,7 +86,7 @@ object Services {
    * A service that records messages that couldn't be processed.
    */
   class InvalidMessageHandler {
-    def invalid(msg: Data) = { println(s"Handled error for message: $msg") }
+    def invalid(msg: Data) = { println(s"Handled error for message: $msg".red) }
   }
 
   /**
@@ -95,7 +96,7 @@ object Services {
     if (random.nextInt(100) > failurePercentage)
       Success(func)
     else
-      Failure(new Exception(s"Random failure from '$tag'!"))
+      Failure(new Exception(s"Random failure from '$tag'!".yellow))
 
   /**
    * Make operations take a random amount of time and intermittently fail.
