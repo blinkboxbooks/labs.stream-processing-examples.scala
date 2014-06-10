@@ -29,14 +29,23 @@ trait PipelineActor extends Actor with ActorLogging {
   implicit def timeout: Timeout
   def retryInterval: FiniteDuration
 
+  /** Partial function to be called when processing messages, override in concrete implementations. */
+  def process: PartialFunction[Any, Any]
+
+  /** Override to define where the result will be sent on successful result. */
+  def respondTo: ActorRef
+
+  /** Override to define which errors should be considered recoverable hence would be retried. */
+  def isTemporaryFailure(e: Throwable): Boolean
+
   // Restart children in case of temporary glitches, stop them and report failure for other errors.
+  override def supervisorStrategy = OneForOneStrategy()(customDecider.orElse(defaultDecider))
   private val customDecider: SupervisorStrategy.Decider = {
     case TemporaryFailure(originator, e) => Restart
     case UnrecoverableFailure(originator, e) =>
       originator ! Failure(e)
       Stop
   }
-  override def supervisorStrategy = OneForOneStrategy()(customDecider.orElse(defaultDecider))
 
   final def receive = {
     // Forward work requests to a dedicated child actor.
@@ -67,7 +76,11 @@ trait PipelineActor extends Actor with ActorLogging {
 
     def receive = {
       case msg: Process => try {
-        sendResponseAndShutdown(getResult(msg.data))
+        if (!process.isDefinedAt(msg)) {
+          throw new IllegalStateException("Internal error: unexpected message: " + msg.data)
+        }
+        val result = process(msg)
+        sendResponseAndShutdown(result)
       } catch {
         // Wrap exception including all details.
         case NonFatal(e) if isTemporaryFailure(e) => throw TemporaryFailure(originator, e)
@@ -82,15 +95,6 @@ trait PipelineActor extends Actor with ActorLogging {
     }
 
   }
-
-  /** Override to compute result of this step in the pipeline. */
-  def getResult(input: Any): Any
-
-  /** Override to define where the result will be sent on successful result. */
-  def respondTo: ActorRef
-
-  /** Override to define which errors should be considered recoverable hence would be retried. */
-  def isTemporaryFailure(e: Throwable): Boolean
 
 }
 

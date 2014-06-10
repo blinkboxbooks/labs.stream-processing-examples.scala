@@ -39,10 +39,12 @@ class AkkaPipelineActorsTest extends TestKit(ActorSystem("test-system")) with Im
 
   /** A test actor class that delegates requests to a DAO. */
   abstract class TestPipelineActor(dao: Dao) extends PipelineActor {
-    def getResult(input: Any): Any = dao.getResult(input.asInstanceOf[Int])
-    def isTemporaryFailure(e: Throwable): Boolean = e.isInstanceOf[ExampleTemporaryError]
-    def retryInterval = retryTime
-    def timeout = 1.minute
+    override def process = {
+      case Process(data: Int) => dao.getResult(data)
+    }
+    override def isTemporaryFailure(e: Throwable): Boolean = e.isInstanceOf[ExampleTemporaryError]
+    override def retryInterval = retryTime
+    override def timeout = 1.minute
   }
 
   /** A test requester actor. */

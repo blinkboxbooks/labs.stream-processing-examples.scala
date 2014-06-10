@@ -174,27 +174,31 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
   }
 
   class ReverserActor(reverser: Reverser, output: ActorRef) extends ExamplePipelineActor with Requester {
-    def getResult(input: Any): Any = {
-      Reversed(Await.result(reverser.transform(input.asInstanceOf[String]), retryInterval))
+    override def process = {
+      case Process(input: String) =>
+        Reversed(Await.result(reverser.transform(input), retryInterval))
     }
   }
 
   class SorterActor(sorter: Sorter, output: ActorRef) extends ExamplePipelineActor with Requester {
-    def getResult(input: Any): Any = {
-      Sorted(Await.result(sorter.transform(input.asInstanceOf[String]), retryInterval))
+    override def process = {
+      case Process(input: String) =>
+        Sorted(Await.result(sorter.transform(input), retryInterval))
     }
   }
 
   class UpperCaserActor(upperCaser: UpperCaser, output: ActorRef) extends ExamplePipelineActor with Requester {
-    def getResult(input: Any): Any = {
-      UpperCased(Await.result(upperCaser.transform(input.asInstanceOf[String]), retryInterval))
+    override def process = {
+      case Process(input: String) =>
+        UpperCased(Await.result(upperCaser.transform(input), retryInterval))
     }
   }
 
   class TransformerActor(transformerService: DataTransformer, override val output: ActorRef)
     extends ExamplePipelineActor with Transformer {
-    def getResult(input: Any): Any = {
-      Process(Await.result(transformerService.transform(input.asInstanceOf[EnrichedData]), retryInterval))
+    override def process = {
+      case Process(input: EnrichedData) =>
+        Process(Await.result(transformerService.transform(input), retryInterval))
     }
   }
 
@@ -203,8 +207,8 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
     override def preStart() = println("Let's pretend I'm opening my database connection here")
     override def postStop() = println("Let's pretend I'm closing my database connection here")
 
-    def getResult(input: Any): Any = {
-      out.save(input.asInstanceOf[OutputData])
+    override def process = {
+      case Process(input: OutputData) => out.save(input)
     }
   }
 
