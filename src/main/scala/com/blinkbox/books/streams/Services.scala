@@ -5,6 +5,7 @@ import scala.concurrent.Future
 import scala.util.Random
 import scala.util.{ Try, Success, Failure }
 import pl.project13.scala.rainbow.Rainbow._
+import java.io.IOException
 
 /**
  * Shared services and utilities for the message processing examples.
@@ -14,7 +15,12 @@ object Services {
   // Values used in randomising behaviour.
   val random = new Random
   val maxWaitTime = 5000
+
+  // Percentage of requests that fail.
   val failurePercentage = 2
+
+  // Percentage of requests that are temporary failures (throw IOException).
+  val temporaryFailurePercentage = 80
 
   /** An input message. */
   case class Data(id: Long, value: String)
@@ -95,8 +101,17 @@ object Services {
   def sometimes[T](tag: String)(func: => T): Try[T] =
     if (random.nextInt(100) > failurePercentage)
       Success(func)
-    else
-      Failure(new Exception(s"Random failure from '$tag'!".yellow))
+    else {
+      Failure(exception(s"Random failure from '$tag'!".yellow))
+    }
+
+  /**
+   * Sometimes produces an IOException, sometimes a plain exception.
+   */
+  def exception(msg: String) =
+    if (random.nextInt(100) < temporaryFailurePercentage)
+      new IOException(msg)
+    else new Exception(msg)
 
   /**
    * Make operations take a random amount of time and intermittently fail.

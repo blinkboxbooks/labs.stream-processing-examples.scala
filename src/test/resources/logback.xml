@@ -8,9 +8,9 @@
     </encoder>
   </appender>
 
-  <logger name="com.blinkbox" level="INFO" />
+  <logger name="com.blinkbox" level="DEBUG" />
   
-  <root level="INFO">
+  <root level="DEBUG">
     <appender-ref ref="STDOUT" />
   </root>
   

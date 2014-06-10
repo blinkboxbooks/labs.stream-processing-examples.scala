@@ -43,6 +43,7 @@ trait PipelineActor extends Actor with ActorLogging {
     case request: Process =>
       val outputHandler = context.actorOf(handlerProps(request, respondTo, sender))
       outputHandler.forward(request)
+    case msg => log.error("Unexpected message: " + msg)
   }
 
   def handlerProps(request: Process, responseTo: ActorRef, originator: ActorRef) =
@@ -75,6 +76,7 @@ trait PipelineActor extends Actor with ActorLogging {
     }
 
     private def sendResponseAndShutdown(outputData: Any) {
+      println(s"Telling $responseTo about data $outputData from $originator")
       responseTo.tell(outputData, originator)
       context.stop(self)
     }
@@ -101,6 +103,9 @@ object PipelineActor {
   case class UnrecoverableFailure(originator: ActorRef, e: Throwable) extends Exception(e)
   case class TemporaryFailure(originator: ActorRef, e: Throwable) extends Exception(e)
 
+  /** Properties for an actor that will silently swallow all messages. The /dev/null of actors. */
+  def nullActorProps: Props = Props(new NullActor())
+
 }
 
 /** Actor that responds with a computed result. */
@@ -112,4 +117,16 @@ trait Requester extends PipelineActor {
 trait Transformer extends PipelineActor {
   final def respondTo = output
   val output: ActorRef
+}
+
+/** Actor that only performs side-effects, i.e. doesn't forward or respond with any results. */
+trait Sink extends PipelineActor {
+  private val out = context.actorOf(PipelineActor.nullActorProps)
+  def respondTo = out
+}
+
+private class NullActor extends Actor {
+  def receive() = {
+    case _ => // Do nothing.
+  }
 }
