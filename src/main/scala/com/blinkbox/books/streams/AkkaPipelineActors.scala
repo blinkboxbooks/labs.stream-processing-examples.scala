@@ -1,25 +1,19 @@
 package com.blinkbox.books.streams
 
-import akka.actor.Actor
-import akka.actor.ActorRef
-import akka.util.Timeout
-import scala.concurrent.duration._
-import scala.concurrent.Future
-import akka.actor.Props
-import akka.actor.ActorLogging
+import akka.actor.{ Actor, ActorLogging, ActorRef, Props, OneForOneStrategy, SupervisorStrategy }
 import akka.actor.Status.Failure
+import akka.actor.SupervisorStrategy._
+import akka.util.Timeout
+import scala.util.control.NonFatal
+import scala.concurrent.duration._
 
 /**
  * A collection of common actor classes that are useful in pipeline processing.
  */
 
-object AkkaPipelineActors {
-
-}
-
 /**
  * Common trait for pipeline actors, that is:
- * actors that get an input, compute some result based on it, it and either pass on
+ * actors that get an input, compute some result based on it, and either pass on
  * or return the result.
  *
  * The action used to compute the result will be retried in the case of a temporary failure,
@@ -27,63 +21,95 @@ object AkkaPipelineActors {
  * In the case of an unrecoverable error, typically due to bad input data, a failure will be sent back to the
  * sender of the input data.
  */
-trait PipelineActor[I, O] extends Actor {
+trait PipelineActor extends Actor with ActorLogging {
 
   import context.dispatcher
+  import PipelineActor._
 
-  // TODO: Think about timeouts.
-  implicit val timeout: Timeout = 24.hours
+  implicit def timeout: Timeout
+  def retryInterval: FiniteDuration
 
-  def receive = {
-    case data: I =>
-      val outputHandler = context.actorOf(handlerProps(data, respondTo, sender))
-      outputHandler.forward(data)
+  // Restart children in case of temporary glitches, stop them and report failure for other errors.
+  private val customDecider: SupervisorStrategy.Decider = {
+    case TemporaryFailure(originator, e) => Restart
+    case UnrecoverableFailure(originator, e) =>
+      originator ! Failure(e)
+      Stop
+  }
+  override def supervisorStrategy = OneForOneStrategy()(customDecider.orElse(defaultDecider))
+
+  final def receive = {
+    // Forward work requests to a dedicated child actor.
+    case request: Process =>
+      val outputHandler = context.actorOf(handlerProps(request, respondTo, sender))
+      outputHandler.forward(request)
   }
 
-  def handlerProps(input: I, responseTo: ActorRef, originator: ActorRef) =
-    Props(new RetryingPipelineHandler(input, responseTo, originator))
+  def handlerProps(request: Process, responseTo: ActorRef, originator: ActorRef) =
+    Props(new PipelineRequestHandler(request, responseTo, originator))
 
   /**
    * Short-lived actor that retries to process a single input message, until it succeeds, then stops.
+   * It makes a blocking call - not much point in responding to this off the actor thread.
    */
-  private class RetryingPipelineHandler(input: I, responseTo: ActorRef, originator: ActorRef)
+  private class PipelineRequestHandler(request: Process, responseTo: ActorRef, originator: ActorRef)
     extends Actor with ActorLogging {
 
-    def receive = {
-      case data: I => getResult(input).onComplete({
-        case scala.util.Success(outputData) =>
-          responseTo.tell(outputData, originator)
-          context.stop(self)
-        case scala.util.Failure(e) if isTemporaryFailure(e) => retry(data)
-        case scala.util.Failure(e) =>
-          originator ! Failure(e)
-          context.stop(self)
-      })
+    val requestTimeout = 5.seconds // The timeout for a single request attempt.
+
+    override def preRestart(reason: Throwable, message: Option[Any]) = {
+      super.preRestart(reason, message)
+      // Send the message to ourselves so we can have another go, after a suitable interval.
+      log.debug("Rescheduling message for retry")
+      message.foreach { msg => context.system.scheduler.scheduleOnce(retryInterval, self, msg) }
     }
 
-    private def retry(data: I) = {
-      log.info(s"Retrying write for $data")
-      context.system.scheduler.scheduleOnce(3.seconds, self, data)
+    def receive = {
+      case msg: Process => try {
+        sendResponseAndShutdown(getResult(msg.data))
+      } catch {
+        // Wrap exception including all details.
+        case NonFatal(e) if isTemporaryFailure(e) => throw TemporaryFailure(originator, e)
+        case NonFatal(e) => throw UnrecoverableFailure(originator, e)
+      }
+    }
+
+    private def sendResponseAndShutdown(outputData: Any) {
+      responseTo.tell(outputData, originator)
+      context.stop(self)
     }
 
   }
 
   /** Override to compute result of this step in the pipeline. */
-  def getResult(input: I): Future[O]
+  def getResult(input: Any): Any
 
   /** Override to define where the result will be sent on successful result. */
   def respondTo: ActorRef
 
   /** Override to define which errors should be considered recoverable hence would be retried. */
   def isTemporaryFailure(e: Throwable): Boolean
+
+}
+
+object PipelineActor {
+
+  /** Request to an actor in a pipeline to process a piece of input data. */
+  case class Process(val data: Any)
+
+  // Exception classes used to signal failure in worker actor.
+  case class UnrecoverableFailure(originator: ActorRef, e: Throwable) extends Exception(e)
+  case class TemporaryFailure(originator: ActorRef, e: Throwable) extends Exception(e)
+
 }
 
 /** Actor that responds with a computed result. */
-abstract class Requester[I, O] extends PipelineActor[I, O] {
+trait Requester extends PipelineActor {
   def respondTo = sender
 }
 
 /** Actor that forwards computed result. */
-abstract class Transformer[I, O](output: ActorRef) extends PipelineActor[I, O] {
-  def respondTo = output
+trait Transformer extends PipelineActor {
+  final def respondTo = output
+  val output: ActorRef
 }

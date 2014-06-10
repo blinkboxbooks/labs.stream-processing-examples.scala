@@ -11,18 +11,21 @@ import Services._
 
 /**
  * A pipeline of message processing, implemented using Akka Actors.
- * 
- * This initial version works, but has lots of duplicated code as there's been 
+ *
+ * This initial version works, but has lots of duplicated code as there's been
  * no attempt to factor out common parts - yet!
  */
 object AkkaEnrichmentPipeline extends App with MessageProcessor {
 
+  implicit val system = ActorSystem("messsage-pipeline")
+
   // Kick things off.
   startActorSystem()
 
-  def startActorSystem() {
+  // Wait around.
+  Console.readLine()
 
-    implicit val system = ActorSystem("messsage-pipeline")
+  def startActorSystem() {
 
     // Create and wire up the various actors.
     val errorHandler = system.actorOf(Props(new ErrorHandler(invalidMsgHandler)), name = "error-handler")
@@ -34,9 +37,6 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
     val enricher = system.actorOf(Props(new Enricher(reverser, upperCaser, sorter, transformer)), name = "enricher")
     val source = system.actorOf(Props(new Source(input, enricher, errorHandler)), name = "source")
   }
-
-  // Wait around.
-  Console.readLine()
 
   // Global for now.
   val retryTime = 5.seconds
@@ -50,6 +50,8 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
   /**
    * An actor that just sends a new message every second,
    * and acknowledges completions to some external entity, its input (i.e. as one would with RabbitMQ).
+   *
+   * In this example, this is the head of the pipeline.
    */
   class Source(input: Input, output: ActorRef, errorHandler: ActorRef)
     extends Actor with ActorLogging {
@@ -74,8 +76,8 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
 
     case object Ping
 
-    // Create a helper actor that ACKs a single message when successful,
-    // or passes on the input to an error handler actor when failing.
+    // Create a short-lived actor that's responsible for ACKing a single message when successful,
+    // or passing on the input to an error handler actor in case of a failure.
     def responseHandlerProps(input: Input, message: Data, errorHandler: ActorRef) =
       Props(new ResponseHandler(input, message, errorHandler))
 
@@ -84,13 +86,13 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
         case _: Success => input.ack(message.id)
         case Failure(e) => errorHandler ! message // Signifies unrecoverable error.
       }
-      // TODO: Could have a postStop() that calls "nack" on the message if it wasn't acked?
+      // TODO: Could have a postStop() that calls "nack" on the message if it wasn't acked? And a timeout.
     }
   }
 
   /**
-   * Actor that performs storage of messages that failed with an unrecoverable error, for handling
-   * outside of this process.
+   * Simple actor that performs storage of messages that failed with an unrecoverable error, for handling
+   * outside of this process. In real life this might be a RabbitMQ DLQ, an error log, or similar.
    */
   class ErrorHandler(handler: InvalidMessageHandler) extends Actor with ActorLogging {
     def receive = {
@@ -101,6 +103,9 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
   /**
    * Actor that takes input messages, enriches them via helper services, and forwards the result if successful.
    * In case of an input that can't be handled, it will respond with a Failure to the sender.
+   *
+   * See "Cameo Pattern" and "Capturing Context" sections in Effective Akka book:
+   * http://my.safaribooksonline.com/book/programming/scala/9781449360061/2dot-patterns-of-actor-usage/cameo_pattern_html
    */
   class Enricher(reverser: ActorRef, upperCaser: ActorRef, sorter: ActorRef, output: ActorRef)
     extends Actor with ActorLogging {
@@ -126,7 +131,11 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
     def enrichmentHandlerProps(input: Data, originator: ActorRef, output: ActorRef) =
       Props(new EnrichmentHandler(input, originator, output))
 
-    // Simple actor that merges enrichment data then forwards result when complete.
+    /**
+     *  Simple actor that merges enrichment data then forwards result when complete.
+     *  On failure, it sends this back to the sender of the original message that triggered it,
+     *  i.e. the originator.
+     */
     private class EnrichmentHandler(input: Data, originator: ActorRef, output: ActorRef) extends Actor with ActorLogging {
 
       var reversed: Option[String] = None
@@ -235,7 +244,7 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
 
     def receive = {
       case data: EnrichedData =>
-//        log.warning(s"Transformer got message from $sender")
+        //        log.warning(s"Transformer got message from $sender")
         val handler = context.actorOf(transformHandlerProps(transformerService, output, sender))
         handler.forward(data)
     }
@@ -306,10 +315,13 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
 
       import context.dispatcher
 
+      // TODO: A real DB writing actor would get a DB connection in preStart()
+      //       and close it in postStop().
+
       def receive = {
         case _ => output.save(data) match {
           case scala.util.Success(_) =>
-//            log.warning(s"Trying to send message to actor ref '$originator'")
+            //            log.warning(s"Trying to send message to actor ref '$originator'")
             originator ! Success
             context.stop(self)
           case scala.util.Failure(e) if isTemporaryFailure(e) => retry()
