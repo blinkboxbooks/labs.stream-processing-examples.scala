@@ -72,30 +72,15 @@ object AkkaEnrichmentPipeline extends App with MessageProcessor {
 
   object Source {
 
-    // Create a short-lived actor that's responsible for ACKing a single message when successful,
-    // or passing on the input to an error handler actor in case of a failure.
-    // TODO: Move this into shared code and add tests.
     def responseHandlerProps(input: Input, data: Data, errorHandler: ActorRef) =
       Props(new ResponseHandler(input, data, errorHandler))
 
-    private class ResponseHandler(input: Input, data: Data, errorHandler: ActorRef) extends Actor with ActorLogging {
-      var succeeded: Option[Boolean] = None
-      def receive = {
-        case _: Success =>
-          input.ack(data.id)
-          succeeded = Some(true)
-        case Failure(e) =>
-          errorHandler ! data // Signifies unrecoverable error.
-          succeeded = Some(false)
-      }
-
-      override def postStop() = {
-        if (!succeeded.isDefined) {
-          log.warning(s"Failed to process message: ${data.id}")
-          input.nack(data.id)
-        }
-      }
+    private class ResponseHandler(input: Input, data: Data, errorHandler: ActorRef) extends BaseResponseHandler {
+      override def onSuccess() = input.ack(data.id)
+      override def onError() = errorHandler ! data
+      override def onNotProcessed() = input.nack(data.id)
     }
+
   }
 
   /**

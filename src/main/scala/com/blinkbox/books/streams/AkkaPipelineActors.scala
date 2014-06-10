@@ -1,7 +1,7 @@
 package com.blinkbox.books.streams
 
 import akka.actor.{ Actor, ActorLogging, ActorRef, Props, OneForOneStrategy, SupervisorStrategy }
-import akka.actor.Status.Failure
+import akka.actor.Status.{ Success, Failure }
 import akka.actor.SupervisorStrategy._
 import akka.util.Timeout
 import scala.util.control.NonFatal
@@ -130,3 +130,36 @@ private class NullActor extends Actor {
     case _ => // Do nothing.
   }
 }
+
+/**
+ * Base class for actors that handles the response of a single message processed in a pipeline.
+ * An instance of this should be created for each message fired into the pipeline, and this actor
+ * should be used as the sender of the message, so that it receives the final Success/Failure notificaiton
+ * and can take appropriate action.
+ */
+abstract class BaseResponseHandler extends Actor with ActorLogging {
+
+  var succeeded: Option[Boolean] = None
+
+  def receive = {
+    case Success =>
+      onSuccess()
+      succeeded = Some(true)
+    case Failure(e) =>
+      log.info(s"Message failed: " + e.getMessage)
+      onError()
+      succeeded = Some(false)
+  }
+
+  override def postStop() =
+    if (!succeeded.isDefined) {
+      onNotProcessed()
+      log.warning(s"Failed to process message")
+    }
+
+  // Methods to override in concrete implementations.
+  def onSuccess(): Unit
+  def onError(): Unit
+  def onNotProcessed(): Unit
+}
+

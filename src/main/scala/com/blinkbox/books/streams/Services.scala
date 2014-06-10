@@ -105,13 +105,11 @@ object Services {
       Failure(exception(s"Random failure from '$tag'!".yellow))
     }
 
-  /**
-   * Sometimes produces an IOException, sometimes a plain exception.
-   */
-  def exception(msg: String) =
+  private def exception(msg: String) =
     if (random.nextInt(100) < temporaryFailurePercentage)
       new IOException(msg)
-    else new Exception(msg)
+    else 
+      new Exception(msg)
 
   /**
    * Make operations take a random amount of time and intermittently fail.
