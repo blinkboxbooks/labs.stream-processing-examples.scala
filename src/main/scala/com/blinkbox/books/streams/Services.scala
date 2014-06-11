@@ -39,7 +39,7 @@ object Services {
    */
   trait Transformer {
     def transform(value: String): Future[String] =
-      sometimesInFuture(s"{getClass.getSimpleName} transforming value $value")(doTransform(value))
+      sometimesInFuture(s"${getClass.getSimpleName} transforming value $value")(doTransform(value))
 
     protected def doTransform(value: String): String
   }
