@@ -81,7 +81,7 @@ In such pipelines, the code for each new concrete actor class should only have t
 
 The result is in [AkkaEnrichmentPipeline.scala](src/main/scala/com/blinkbox/books/streams/AkkaEnrichmentPipeline.scala) with the shared code in [AkkaPipelineActors.scala](src/main/scala/com/blinkbox/books/streams/AkkaPipelineActors.scala). Now the example code is more succinct. It's still much longer than the Rx example, but now we do have the advantage of exact control over the behaviour and error handling at each step. Developers aren't complete shielded from Akka though, they still have to know how to write and debug actors.
 
-Note that the actor code in this section uses a number of patterns such as "Capture Context" and "Cameo", see the [Effective Akka book](http://my.safaribooksonline.com/book/programming/scala/9781449360061/2dot-patterns-of-actor-usage/ch02_html) for details on these.
+Note that the actor code in this section uses a number of patterns such as "Capture Context" and "Cameo", see the ["Effective Akka"](http://my.safaribooksonline.com/book/programming/scala/9781449360061/2dot-patterns-of-actor-usage/ch02_html) book for details on these. Also, ["Developing an Akka Edge"](http://techbus.safaribooksonline.com/9781939902054/h2_43_xhtml?percentage=0&reader=html#X2ludGVybmFsX0h0bWxWaWV3P3htbGlkPTk3ODE5Mzk5MDIwNTQlMkZjaDAwNF9jaGFwdGVyXzVfaGFuZGxpbmdfZmF1bHRzX2FuZF9hY3Rvcl9oaWVyYXJjaHlfeGh0bWwmcXVlcnk9) is a good source of information about error handling patterns in Akka.
 
 ## Futures
 
@@ -93,7 +93,10 @@ The question than becomes how to deal with error scenarios. In a web service we 
 
 There are a couple of options for how we could do the retry logic - we could make it part of each `Future` that's executed, e.g. wrap requests to external services in a `retry {}` block. Or, at the input level where we pick up messages and kick off processing in Futures, we could respond to a (temporary) failure by rescheduling the message to be processed later, until it succeeds.
 
-**No code for this yet - TBD!**
+I've put an early cut of an implementation for this variation in [FuturesProcessor.scala](src/main/scala/com/blinkbox/books/streams/FuturesProcessor.scala). Interestingly, the meat of it is < 40 lines of code, took < half an hour to write - and worked first time! That was definitely not the case with the Actor version... so I'm starting to think this is a strong candidate. Maybe we just don't need all the advanced features of Akka in simple, straight-through, stateless messaging services.
+
+Note that this first version doesn't do retries of individual requests yet, I will try to add wrappers around each step that does this. The consequence of not having such retries is that when failure happens, each message will be retried right from the start. That could cause a fairly large number of requests on the services that are working, that get accessed before the failing service.
+
 
 # Other options
 
