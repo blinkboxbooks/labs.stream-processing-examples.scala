@@ -4,14 +4,13 @@ import akka.actor.{ Actor, ActorRef, ActorLogging, ActorSystem, Props }
 import akka.actor.Status.{ Success, Failure }
 import akka.event.LoggingReceive
 import akka.util.Timeout
+import java.io.IOException
 import java.util.concurrent.TimeoutException
 import pl.project13.scala.rainbow.Rainbow._
 import scala.concurrent.duration._
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{Await, ExecutionContext }
 import PipelineActor._
 import Services._
-import java.io.IOException
-import scala.concurrent.Await
 
 /**
  * A pipeline of message processing, implemented using Akka Actors.

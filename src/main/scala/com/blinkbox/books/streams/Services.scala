@@ -39,10 +39,9 @@ object Services {
    */
   trait Transformer {
     def transform(value: String): Future[String] =
-      sometimesInFuture(s"$tag transforming value $value")(doTransform(value))
+      sometimesInFuture(s"{getClass.getSimpleName} transforming value $value")(doTransform(value))
 
     protected def doTransform(value: String): String
-    private def tag = getClass.getSimpleName
   }
 
   class Reverser extends Transformer {
@@ -108,7 +107,7 @@ object Services {
   private def exception(msg: String) =
     if (random.nextInt(100) < temporaryFailurePercentage)
       new IOException(msg)
-    else 
+    else
       new Exception(msg)
 
   /**

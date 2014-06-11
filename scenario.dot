@@ -1,0 +1,50 @@
+digraph {
+  /* size = "4,4"; */
+  resolution = 300;
+
+  graph [autosize=false, size="10", resolution=100];
+
+  concentrate=true;
+
+  bgcolor=transparent;
+  truecolor=true;
+  rankdir=LR;
+  node [shape=box,style="filled"];
+
+  source [shape=ellipse; color=green; label="Message source"]
+  source -> input;
+
+  enricher [label="Data enrichment step"]
+  input -> enricher
+
+  enricher1 [label="Get enrichment data"]
+  enricher2 [label="Get enrichment data"]
+  enricher3 [label="Get enrichment data"]
+
+  enricher -> enricher1, enricher2, enricher3;
+  enricher1 -> enricher;
+  enricher2 -> enricher;
+  enricher3 -> enricher;
+
+  service1, service2, service3, transformerService 
+    [label="External service"; color=cyan; shape="ellipse"]
+  enricher1 -> service1;
+  enricher2 -> service2;
+  enricher3 -> service3;
+  service1 -> enricher1;
+  service2 -> enricher2;
+  service3 -> enricher3;
+
+  enricher -> transformer;
+
+  transformer -> transformerService;
+  transformerService -> transformer;
+
+  output [shape=ellipse; color=green; label="Output for results"]
+  transformer -> output
+
+  rankdir = TB; 
+  { rank = same; source, input; enricher; transformer; output }
+
+}
+
