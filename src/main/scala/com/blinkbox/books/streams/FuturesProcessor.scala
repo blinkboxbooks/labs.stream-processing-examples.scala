@@ -72,7 +72,10 @@ object FuturesProcessor extends App with MessageProcessor {
     def isTemporaryFailure(e: Throwable) = e.isInstanceOf[IOException] || e.isInstanceOf[TimeoutException]
 
     /** Try again in a while. */
-    def retry(input: Data) = context.system.scheduler.scheduleOnce(retryInterval, self, input)
+    def retry(data: Data) = {
+      log.warning(s"Retrying message: $data")
+      context.system.scheduler.scheduleOnce(retryInterval, self, data)
+    }
   }
 
 }
