@@ -48,7 +48,7 @@ It lets you write complex async processing by writing operations on streams (or 
 
 ## Results
 
-The inital version for this use case looks very neat and simple, and shows with this style of programming is very attractive: the whole pipeline of transforms is less than 15 lines of code! (See [SimpleRxEnrichmentPipeline.scala](src/main/scala/com/blinkbox/books/streams/SimpleRxEnrichmentPipeline.scala))
+The inital version for this use case looks very neat and simple, and shows with this style of programming is very attractive: the whole pipeline of transforms is less than 15 lines of code! (See [SimpleRxEnrichmentPipeline.scala](src/main/scala/com/blinkbox/books/streams/SimpleRxEnrichmentPipeline.scala)). (Though this example doesn't deal with retrying operations on external sercices, it assumes that's handled in each service operation)
 
 There are however a couple of drawbacks. First of all - it doesn't work! Specifically, it doesn't handle error scenarios as we want. It's an inherent feature of Rx Observables that once an error occurs anywhere in the stream, the whole stream is considered failed. That's not what we want; we want to deal with each error by writing them somewhere then carrying on.
 
