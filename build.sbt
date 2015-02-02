@@ -1,8 +1,8 @@
-name := """stream-examples"""
+name := """stream-processing-examples"""
 
 version := "0.0.1"
 
-organization := "com.blinkbox.books.platform.services"
+organization := "com.blinkbox.books"
 
 scalaVersion := "2.10.4"
 
