@@ -17,10 +17,10 @@ object Services {
   val maxWaitTime = 5000
 
   // Percentage of requests that fail.
-  val failurePercentage = 2
+  val failurePercentage = 20
 
   // Percentage of requests that are temporary failures (throw IOException).
-  val temporaryFailurePercentage = 80
+  val temporaryFailurePercentage = 50
 
   /** An input message. */
   case class Data(id: Long, value: String)

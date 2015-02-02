@@ -1,13 +1,17 @@
 package com.blinkbox.books.streams
 
+import java.io.IOException
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicInteger
+
+import scala.annotation.tailrec
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration._
+import scala.util.{ Success, Failure }
+
 import Services._
 import akka.actor.{ Actor, ActorRef, ActorLogging, ActorSystem, Props }
-import pl.project13.scala.rainbow.Rainbow._
-import scala.util.{ Success, Failure }
-import java.util.concurrent.TimeoutException
-import java.io.IOException
 
 object FuturesProcessor extends App with MessageProcessor {
 
@@ -76,6 +80,31 @@ object FuturesProcessor extends App with MessageProcessor {
       log.warning(s"Retrying message: $data")
       context.system.scheduler.scheduleOnce(retryInterval, self, data)
     }
+
+    // Given an operation that returns a Future, return a Future that completes 
+    // with success when the underlying operation returns a successful operation after up to 
+    // the number of given retries, or completes with failure when the underlying operation
+    // has completed with failure the given number of times.
+    def retry[T](interval: FiniteDuration, times: Int)(fn: => Future[T]): Future[T] = {
+      require(times > 0, "Must try operation at least once")
+      val promise = Promise[T]()
+
+      val remaining = new AtomicInteger(times)
+      val res = fn
+      res.onComplete {
+        case s: Success[T] => promise.complete(s)
+        case Failure(e) if !isTemporaryFailure(e) => promise.complete(Failure(e))
+        case f: Failure[T] =>
+          val remainingAttempts = remaining.decrementAndGet()
+          if (remainingAttempts == 0)
+            promise.complete(f)
+          else
+            retry(interval, remainingAttempts)(fn)
+      }
+
+      promise.future
+    }
+
   }
 
 }
